@@ -29,6 +29,14 @@ export function breakoutBadge(breakout) {
   return `<span class="badge ${cls}">${escapeHtml(breakout.pattern)} · ${breakout.score}</span>`;
 }
 
+export function smartMoneyBadge(smartMoney) {
+  if (!smartMoney || !smartMoney.agreement) return `<span class="badge badge-muted">—</span>`;
+  const cls = smartMoney.agreement === "Cross-Confirmed Accumulation" ? "badge-green"
+    : smartMoney.agreement === "Cross-Confirmed Distribution" ? "badge-red"
+    : smartMoney.agreement === "Mixed" ? "badge-amber" : "badge-muted";
+  return `<span class="badge ${cls}">${escapeHtml(smartMoney.agreement)}</span>`;
+}
+
 export function scoreClass(score) {
   if (score === null || score === undefined) return "neu";
   return score > 0.5 ? "pos" : score < -0.5 ? "neg" : "neu";

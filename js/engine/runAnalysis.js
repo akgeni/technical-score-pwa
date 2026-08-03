@@ -10,6 +10,7 @@ import * as trendStrength from "./metrics/trendStrength.js";
 import * as meanReversion from "./metrics/meanReversion.js";
 import { scoreFromMetrics, stubEventScore } from "./compositeScorer.js";
 import { computeBreakout } from "./breakout/scanEngine.js";
+import * as smartMoney from "./smartMoney.js";
 
 // The Nifty 50 index itself (^NSEI) -- back to the same benchmark the Flask app effectively
 // uses (NIFTY50 as its sector-index fallback), now that Yahoo Finance is reachable directly
@@ -40,5 +41,17 @@ export async function runAnalysis(symbol, workerUrl, benchData) {
   const composite = scoreFromMetrics(results, currentPrice);
   const breakout = computeBreakout(ohlcv, benchData);
 
-  return { composite, breakout, currentPrice, name: ohlcv.longName };
+  // Smart money (Tier 2/3 only -- see js/engine/smartMoney.js) hits NSE's archive endpoints,
+  // a different and flakier data source than Yahoo Finance. A failure here must not take down
+  // the composite/breakout result the rest of this refresh already computed successfully,
+  // mirroring services/composite.py's own try/except around this same call.
+  let smartMoneyResult = null;
+  try {
+    const nseSymbol = symbol.split(".")[0];
+    smartMoneyResult = await smartMoney.compute(nseSymbol, workerUrl);
+  } catch (e) {
+    smartMoneyResult = null;
+  }
+
+  return { composite, breakout, smartMoney: smartMoneyResult, currentPrice, name: ohlcv.longName };
 }

@@ -2,8 +2,8 @@ import * as store from "../storage/localStore.js";
 import { symbolSearch, refreshQueue } from "../api/yahooFinance.js";
 import { runAnalysis, fetchBenchmark } from "../engine/runAnalysis.js";
 import {
-  escapeHtml, regimeBadge, signalBadge, breakoutBadge, scoreClass, fmtScore, fmtPrice,
-  isBestEvidenced, showToast,
+  escapeHtml, regimeBadge, signalBadge, breakoutBadge, smartMoneyBadge, scoreClass, fmtScore,
+  fmtPrice, isBestEvidenced, showToast,
 } from "./components.js";
 
 let bestEvidencedOnly = false;
@@ -96,6 +96,7 @@ export function renderDashboard(container) {
 function renderStockRow({ stock, result }) {
   const composite = result?.composite;
   const breakout = result?.breakout;
+  const smartMoney = result?.smartMoney;
   const price = result?.currentPrice;
   const best = isBestEvidenced(result);
   return `
@@ -112,6 +113,7 @@ function renderStockRow({ stock, result }) {
           ${regimeBadge(composite?.regime)}
           ${signalBadge(composite?.signal)}
           ${breakoutBadge(breakout)}
+          ${smartMoneyBadge(smartMoney)}
         </div>
       </div>
     </div>
@@ -186,8 +188,8 @@ function onSelectSearchResult(idx) {
 
 async function refreshOne(stock, workerUrl) {
   const bench = await fetchBenchmark(workerUrl);
-  const { composite, breakout, currentPrice, name } = await runAnalysis(stock.symbol, workerUrl, bench);
-  store.saveResult(stock.id, { composite, breakout, currentPrice });
+  const { composite, breakout, smartMoney, currentPrice } = await runAnalysis(stock.symbol, workerUrl, bench);
+  store.saveResult(stock.id, { composite, breakout, smartMoney, currentPrice });
   const app = document.getElementById("app");
   if (app.querySelector(".stock-row")) renderDashboard(app);
 }
@@ -214,8 +216,8 @@ async function onRefreshAll(container) {
     await Promise.all(watchlist.map((stock) =>
       refreshQueue.enqueue(async () => {
         try {
-          const { composite, breakout, currentPrice } = await runAnalysis(stock.symbol, workerUrl, bench);
-          store.saveResult(stock.id, { composite, breakout, currentPrice });
+          const { composite, breakout, smartMoney, currentPrice } = await runAnalysis(stock.symbol, workerUrl, bench);
+          store.saveResult(stock.id, { composite, breakout, smartMoney, currentPrice });
         } catch (e) {
           console.error(`Refresh failed for ${stock.symbol}:`, e);
         } finally {

@@ -149,6 +149,25 @@ function isBestEvidenced(compositeResult, breakoutResult) {
 }
 log("Uptrend qualifies as Best-Evidenced:", isBestEvidenced(composite1, breakout2));
 
+log("\n=== Test 8: miniZip against a real downloaded NSE F&O bhavcopy zip ===");
+try {
+  const { unzipSingleEntry } = await import("./js/api/miniZip.js");
+  const zipResp = await fetch("./test-fo-bhavcopy.zip");
+  const zipBuf = await zipResp.arrayBuffer();
+  log("zip file size:", zipBuf.byteLength, "bytes");
+  const unzipped = await unzipSingleEntry(zipBuf);
+  const text = new TextDecoder("utf-8").decode(unzipped);
+  const firstLine = text.split(/\r?\n/)[0];
+  const lineCount = text.split(/\r?\n/).filter(l => l.trim()).length;
+  log("decompressed size:", unzipped.byteLength, "bytes");
+  log("first line (header):", firstLine);
+  log("line count:", lineCount);
+  const expectedHeader = "TradDt,BizDt,Sgmt,Src,FinInstrmTp,FinInstrmId,ISIN,TckrSymb,SctySrs,XpryDt,FininstrmActlXpryDt,StrkPric,OptnTp,FinInstrmNm,OpnPric,HghPric,LwPric,ClsPric,LastPric,PrvsClsgPric,UndrlygPric,SttlmPric,OpnIntrst,ChngInOpnIntrst,TtlTradgVol,TtlTrfVal,TtlNbOfTxsExctd,SsnId,NewBrdLotQty,Rmks,Rsvd1,Rsvd2,Rsvd3,Rsvd4";
+  log(firstLine === expectedHeader ? "PASS: header matches expected exactly" : "FAIL: header mismatch!");
+} catch (e) {
+  log("FAIL: miniZip threw:", e.message, e.stack);
+}
+
 log("\n=== ALL TESTS RAN WITHOUT THROWING ===");
 window.__testsOk = true;
 

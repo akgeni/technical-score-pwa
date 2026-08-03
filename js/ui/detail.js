@@ -1,7 +1,8 @@
 import * as store from "../storage/localStore.js";
 import { refreshOneById } from "./dashboard.js";
 import {
-  escapeHtml, regimeBadge, signalBadge, scoreClass, fmtScore, fmtPrice, isBestEvidenced, showToast,
+  escapeHtml, regimeBadge, signalBadge, smartMoneyBadge, scoreClass, fmtScore, fmtPrice,
+  isBestEvidenced, showToast,
 } from "./components.js";
 
 const METRIC_LABELS = {
@@ -22,6 +23,7 @@ export function renderDetail(container, stockId) {
   const result = store.getResult(stockId);
   const composite = result?.composite;
   const breakout = result?.breakout;
+  const smartMoney = result?.smartMoney;
 
   container.innerHTML = `
     <div class="detail-header">
@@ -72,6 +74,11 @@ export function renderDetail(container, stockId) {
     <div class="section-title">Breakout Pattern</div>
     <div class="card">
       ${renderBreakout(breakout)}
+    </div>
+
+    <div class="section-title">Smart Money (Tier 2 + 3)</div>
+    <div class="card">
+      ${renderSmartMoney(smartMoney)}
     </div>
     `}
   `;
@@ -171,6 +178,45 @@ function renderBreakout(breakout) {
       ${others.map((p) => `<span class="badge badge-muted">${escapeHtml(p.name)} — ${p.score.total}/100</span>`).join("")}
     </div>` : ""}
   `;
+}
+
+function renderSmartMoney(smartMoney) {
+  if (!smartMoney) {
+    return `<div class="empty-state">Not yet computed, or the NSE fetch failed on last refresh (a flaky NSE endpoint doesn't block the rest of the score — just retry Refresh).</div>`;
+  }
+  const t2 = smartMoney.details?.tier2;
+  const t3 = smartMoney.details?.tier3;
+  return `
+    <div style="margin-bottom:10px;">${smartMoneyBadge(smartMoney)}</div>
+    <p style="font-size:0.78rem; color:var(--text-muted); margin:0 0 12px;">
+      Cross-tier NSE flow read: stock-futures OI buildup direction (Tier 2, unattributed —
+      NSE's free report has no per-stock FII breakdown) and delivery-weighted accumulation
+      (Tier 3). Standalone display, not part of the composite score. Tier 1 (named bulk/block
+      deal counterparties) isn't included in this app — it needs a background process
+      accumulating daily snapshots, which a backend-less app can't reliably do.
+    </p>
+
+    <div class="tf-item" style="margin-bottom:10px;">
+      <span class="tf-label">Tier 2 — Futures OI</span>
+      <span class="tf-value">${renderTierLine(t2, (t) =>
+        `${escapeHtml(t.latestState)} · conviction ${t.conviction} · ${t.bullishDays}↑/${t.bearishDays}↓ over ${t.windowDays}d`
+      )}</span>
+    </div>
+    <div class="tf-item">
+      <span class="tf-label">Tier 3 — Delivery Accumulation</span>
+      <span class="tf-value">${renderTierLine(t3, (t) =>
+        `flow z=${t.flowZ}${t.atsZ !== null ? `, trade-size z=${t.atsZ}` : ""} · latest delivery ${t.latestDelivPer}% · ${t.windowDays}d`
+      )}</span>
+    </div>
+  `;
+}
+
+function renderTierLine(tier, formatOk) {
+  if (!tier) return `<span style="color:var(--text-muted);">no futures / no data</span>`;
+  if (tier.status === "insufficient_data") return `<span style="color:var(--text-muted);">insufficient data yet</span>`;
+  if (tier.status !== "ok") return `<span style="color:var(--text-muted);">${escapeHtml(tier.status)}</span>`;
+  const color = tier.direction === "Bullish" ? "var(--green)" : tier.direction === "Bearish" ? "var(--red)" : "var(--amber)";
+  return `<span style="color:${color};">${escapeHtml(tier.direction)}</span> — ${escapeHtml(formatOk(tier))}`;
 }
 
 function camelToTitle(s) {

@@ -1,5 +1,5 @@
 import * as store from "../storage/localStore.js";
-import { symbolSearch, refreshQueue } from "../api/twelveData.js";
+import { symbolSearch, refreshQueue } from "../api/yahooFinance.js";
 import { runAnalysis, fetchBenchmark } from "../engine/runAnalysis.js";
 import {
   escapeHtml, regimeBadge, signalBadge, breakoutBadge, scoreClass, fmtScore, fmtPrice,
@@ -30,16 +30,16 @@ export function renderDashboard(container) {
     other: rows.filter((r) => !r.result?.composite?.regime || r.result.composite.regime === "Neutral").length,
   };
 
-  const hasKey = !!store.getApiKey();
+  const hasWorker = !!store.getWorkerUrl();
 
   container.innerHTML = `
-    ${!hasKey ? `
+    ${!hasWorker ? `
     <div class="card" style="border-color: var(--amber);">
-      <strong>No Twelve Data API key set.</strong>
+      <strong>No proxy Worker URL set.</strong>
       <p style="color: var(--text-muted); font-size: 0.85rem; margin: 6px 0 10px;">
-        You can browse and search stocks, but refreshing scores needs a free key.
+        You can browse, but fetching live scores needs your own free Cloudflare Worker relay — see Settings.
       </p>
-      <button class="btn btn-primary btn-sm" id="btn-open-settings-banner">Add API key</button>
+      <button class="btn btn-primary btn-sm" id="btn-open-settings-banner">Add Worker URL</button>
     </div>` : ""}
 
     <div class="summary-row">
@@ -56,7 +56,7 @@ export function renderDashboard(container) {
         ${searchResults.map((r, i) => `
           <div class="search-result-item" data-idx="${i}">
             <div class="sym">${escapeHtml(r.symbol)} <span style="color: var(--text-muted); font-weight: 400;">${escapeHtml(r.exchange)}</span></div>
-            <div class="name">${escapeHtml(r.instrumentName)}</div>
+            <div class="name">${escapeHtml(r.name)}</div>
           </div>`).join("")}
       </div>` : ""}
     </div>
@@ -73,13 +73,13 @@ export function renderDashboard(container) {
       <span style="font-size: 0.85rem; color: var(--text-muted);">
         ${refreshingAll ? `Refreshing… ${refreshProgress.done}/${refreshProgress.total}` : `${watchlist.length} stock(s) tracked`}
       </span>
-      <button class="btn btn-sm" id="btn-refresh-all" ${refreshingAll || !hasKey || watchlist.length === 0 ? "disabled" : ""}>
+      <button class="btn btn-sm" id="btn-refresh-all" ${refreshingAll || !hasWorker || watchlist.length === 0 ? "disabled" : ""}>
         Refresh All
       </button>
     </div>
     ${refreshingAll ? `
     <div class="progress-bar-outer"><div class="progress-bar-inner" style="width:${refreshProgress.total ? (100 * refreshProgress.done / refreshProgress.total) : 0}%"></div></div>
-    <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">Free-tier pacing (~7/min) — this can take a few minutes for a large watchlist.</div>
+    <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">Lightly paced (~2/sec) — should finish quickly even for a large watchlist.</div>
     ` : ""}
 
     <div class="card" style="padding: 0;">
@@ -161,9 +161,8 @@ function onSearchInput(e) {
   }
   searchDebounceTimer = setTimeout(async () => {
     try {
-      const results = await symbolSearch(searchQuery);
-      // Keep it relevant to this app's scope (NSE/BSE India, common-stock instruments).
-      searchResults = results.filter((r) => (r.exchange === "NSE" || r.exchange === "BSE")).slice(0, 8);
+      // symbolSearch() already scopes results to NSE/BSE equities.
+      searchResults = (await symbolSearch(searchQuery, store.getWorkerUrl())).slice(0, 8);
     } catch (e) {
       searchResults = [];
     }
@@ -175,19 +174,19 @@ function onSearchInput(e) {
 function onSelectSearchResult(idx) {
   const picked = searchResults[idx];
   if (!picked) return;
-  const entry = store.addToWatchlist(picked.symbol, picked.exchange, picked.instrumentName);
+  const entry = store.addToWatchlist(picked.symbol, picked.exchange, picked.name);
   searchResults = [];
   searchQuery = "";
   renderDashboard(document.getElementById("app"));
   showToast(`Added ${entry.symbol} (${entry.exchange})`);
 
-  const apiKey = store.getApiKey();
-  if (apiKey) refreshOne(entry, apiKey).catch((e) => showToast(`Refresh failed: ${e.message}`));
+  const workerUrl = store.getWorkerUrl();
+  if (workerUrl) refreshOne(entry, workerUrl).catch((e) => showToast(`Refresh failed: ${e.message}`));
 }
 
-async function refreshOne(stock, apiKey) {
-  const bench = await fetchBenchmark(apiKey);
-  const { composite, breakout, currentPrice } = await runAnalysis(stock.symbol, stock.exchange, apiKey, bench);
+async function refreshOne(stock, workerUrl) {
+  const bench = await fetchBenchmark(workerUrl);
+  const { composite, breakout, currentPrice, name } = await runAnalysis(stock.symbol, workerUrl, bench);
   store.saveResult(stock.id, { composite, breakout, currentPrice });
   const app = document.getElementById("app");
   if (app.querySelector(".stock-row")) renderDashboard(app);
@@ -195,14 +194,14 @@ async function refreshOne(stock, apiKey) {
 
 export async function refreshOneById(stockId) {
   const stock = store.getWatchlist().find((s) => s.id === stockId);
-  const apiKey = store.getApiKey();
-  if (!stock || !apiKey) return;
-  await refreshOne(stock, apiKey);
+  const workerUrl = store.getWorkerUrl();
+  if (!stock || !workerUrl) return;
+  await refreshOne(stock, workerUrl);
 }
 
 async function onRefreshAll(container) {
-  const apiKey = store.getApiKey();
-  if (!apiKey) { showToast("Add a Twelve Data API key in Settings first."); return; }
+  const workerUrl = store.getWorkerUrl();
+  if (!workerUrl) { showToast("Add a proxy Worker URL in Settings first."); return; }
   const watchlist = store.getWatchlist();
   if (watchlist.length === 0) return;
 
@@ -211,11 +210,11 @@ async function onRefreshAll(container) {
   renderDashboard(container);
 
   try {
-    const bench = await fetchBenchmark(apiKey); // fetched once, shared across the whole batch
+    const bench = await fetchBenchmark(workerUrl); // fetched once, shared across the whole batch
     await Promise.all(watchlist.map((stock) =>
       refreshQueue.enqueue(async () => {
         try {
-          const { composite, breakout, currentPrice } = await runAnalysis(stock.symbol, stock.exchange, apiKey, bench);
+          const { composite, breakout, currentPrice } = await runAnalysis(stock.symbol, workerUrl, bench);
           store.saveResult(stock.id, { composite, breakout, currentPrice });
         } catch (e) {
           console.error(`Refresh failed for ${stock.symbol}:`, e);

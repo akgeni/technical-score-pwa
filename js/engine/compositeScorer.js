@@ -15,8 +15,9 @@ export const COMPOSITE_WEIGHTS = {
   eventScore: 0.10,
 };
 
-// Event Score needs a paid LLM call from a public client (worse than the Twelve Data key
-// trade-off) — always reported NOT_AVAILABLE, exactly like the Flask app already does
+// Event Score needs a paid LLM call from a public client (an API-key-in-a-public-client
+// problem, unlike the rest of this app's data fetching, which needs no secret at all) --
+// always reported NOT_AVAILABLE, exactly like the Flask app already does
 // whenever its DeepSeek call fails, so this exercises an already-existing fallback path,
 // not new behavior. Weight is redistributed across the other 5 metrics below.
 export function stubEventScore() {

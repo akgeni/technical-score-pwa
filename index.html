@@ -25,14 +25,16 @@
   <dialog id="settings-dialog">
     <form id="settings-form">
       <h3>Settings</h3>
-      <label for="api-key-input">Twelve Data API key</label>
-      <input id="api-key-input" type="text" placeholder="Paste your free Twelve Data API key" autocomplete="off">
+      <label for="worker-url-input">Proxy Worker URL</label>
+      <input id="worker-url-input" type="text" placeholder="https://yahoo-proxy.your-subdomain.workers.dev" autocomplete="off">
       <p class="hint">
-        Get a free key at
-        <a href="https://twelvedata.com/pricing" target="_blank" rel="noopener">twelvedata.com</a>
-        (no card needed). Free tier: 8 requests/min, 800/day — refreshing many stocks is
-        paced automatically. The key is stored only on this device (localStorage), never sent
-        anywhere except directly to Twelve Data's API.
+        Data comes from Yahoo Finance (free, no key, effectively unlimited) via a tiny relay
+        you deploy yourself on Cloudflare Workers' free tier (100,000 requests/day, no card
+        needed) — Yahoo's own response is missing a header browsers require, so this relay
+        just adds it back. See <code>cloudflare-worker/yahoo-proxy.js</code> in the project
+        repo for the ~1-minute copy-paste deploy steps. The URL is stored only on this device
+        (localStorage); nothing goes anywhere except directly from your phone to your own
+        Worker to Yahoo Finance.
       </p>
       <div class="dialog-actions">
         <button type="button" id="btn-cancel-settings" class="btn btn-ghost">Cancel</button>

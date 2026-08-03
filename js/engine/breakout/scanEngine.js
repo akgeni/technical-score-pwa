@@ -3,8 +3,9 @@
 // Port of services/breakout_pattern.py's compute().
 //
 // `d` / `bench` are plain {date, open, high, low, close, volume} objects (arrays, ascending
-// date order) -- the same shape the Twelve Data parser produces, so no separate "build engine
-// dict" step is needed here unlike the Python adapter (which converts from a pandas DataFrame).
+// date order) -- the same shape the Yahoo Finance parser produces, so no separate "build
+// engine dict" step is needed here unlike the Python adapter (which converts from a pandas
+// DataFrame).
 import { CFG } from "./config.js";
 import { contextMetrics } from "./contextMetrics.js";
 import { breakoutState } from "./state.js";

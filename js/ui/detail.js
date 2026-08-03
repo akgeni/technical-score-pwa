@@ -6,7 +6,7 @@ import {
 
 const METRIC_LABELS = {
   vsm: "Volatility-Scaled Momentum",
-  relativeStrength: "Relative Strength (vs NIFTYBEES)",
+  relativeStrength: "Relative Strength (vs Nifty 50)",
   vwapVolume: "VWAP + Volume",
   trendStrength: "Trend Strength (ADX)",
   meanReversion: "Mean Reversion (%B)",

@@ -22,16 +22,16 @@ route();
 // --- Settings dialog ---
 const settingsDialog = document.getElementById("settings-dialog");
 const settingsForm = document.getElementById("settings-form");
-const apiKeyInput = document.getElementById("api-key-input");
+const workerUrlInput = document.getElementById("worker-url-input");
 
 document.getElementById("btn-settings").addEventListener("click", () => {
-  apiKeyInput.value = store.getApiKey();
+  workerUrlInput.value = store.getWorkerUrl();
   settingsDialog.showModal();
 });
 document.getElementById("btn-cancel-settings").addEventListener("click", () => settingsDialog.close());
 settingsForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  store.setApiKey(apiKeyInput.value);
+  store.setWorkerUrl(workerUrlInput.value);
   settingsDialog.close();
   showToast("Settings saved.");
   route();

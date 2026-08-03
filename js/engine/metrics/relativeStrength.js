@@ -1,5 +1,5 @@
-// Sector-Neutral Relative Strength (benchmarked against NIFTYBEES for every stock in this
-// app, in place of the Flask app's per-sector index map — see plan for rationale).
+// Sector-Neutral Relative Strength (benchmarked against the Nifty 50 index for every stock in
+// this app, in place of the Flask app's per-sector index map — see plan for rationale).
 // Port of services/metrics/relative_strength.py.
 import { diffLog, stddev, clamp, round } from "../indicators.js";
 

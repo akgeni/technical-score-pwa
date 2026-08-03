@@ -1,9 +1,9 @@
-// localStorage-backed persistence: API key, watchlist, and each stock's last-computed
-// composite/breakout result. Chosen over IndexedDB for simplicity -- a few dozen stocks'
-// worth of small JSON is nowhere near localStorage's ~5-10MB limit, and the synchronous API
-// avoids IndexedDB's async ceremony for data this small.
+// localStorage-backed persistence: the user's proxy Worker URL, watchlist, and each stock's
+// last-computed composite/breakout result. Chosen over IndexedDB for simplicity -- a few dozen
+// stocks' worth of small JSON is nowhere near localStorage's ~5-10MB limit, and the synchronous
+// API avoids IndexedDB's async ceremony for data this small.
 
-const KEY_API_KEY = "tsw.apiKey";
+const KEY_WORKER_URL = "tsw.workerUrl";
 const KEY_WATCHLIST = "tsw.watchlist";
 const KEY_RESULTS = "tsw.results";
 
@@ -20,13 +20,13 @@ function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-// --- API key ---
-export function getApiKey() {
-  return localStorage.getItem(KEY_API_KEY) || "";
+// --- Worker URL (user's own deployed cloudflare-worker/yahoo-proxy.js) ---
+export function getWorkerUrl() {
+  return localStorage.getItem(KEY_WORKER_URL) || "";
 }
 
-export function setApiKey(key) {
-  localStorage.setItem(KEY_API_KEY, key.trim());
+export function setWorkerUrl(url) {
+  localStorage.setItem(KEY_WORKER_URL, url.trim().replace(/\/$/, ""));
 }
 
 // --- Watchlist: [{id, symbol, exchange, name, addedAt}] ---

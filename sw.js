@@ -1,7 +1,7 @@
 // Service worker: caches the app shell (HTML/CSS/JS) for offline load. Deliberately does NOT
-// intercept or cache Twelve Data API calls (different origin, and price data must always be
-// fetched fresh) -- only same-origin static-file requests go through the cache.
-const CACHE_NAME = "technical-score-v1";
+// intercept or cache Yahoo Finance/Worker-proxy calls (different origin, and price data must
+// always be fetched fresh) -- only same-origin static-file requests go through the cache.
+const CACHE_NAME = "technical-score-v2";
 
 const APP_SHELL = [
   "./",
@@ -9,7 +9,7 @@ const APP_SHELL = [
   "./manifest.json",
   "./css/styles.css",
   "./js/app.js",
-  "./js/api/twelveData.js",
+  "./js/api/yahooFinance.js",
   "./js/storage/localStore.js",
   "./js/ui/components.js",
   "./js/ui/dashboard.js",
@@ -59,7 +59,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return; // never touch cross-origin (Twelve Data) calls
+  if (url.origin !== self.location.origin) return; // never touch cross-origin (Worker proxy) calls
   if (event.request.method !== "GET") return;
 
   event.respondWith(

@@ -10,7 +10,7 @@ phone. Ported from the Flask app in `../technical-analysis-scores`, starting wit
 
 This is a plain static site (no build step) — it just needs to be served over HTTP for the
 service worker and "Add to Home Screen" to work (opening `index.html` directly via `file://`
-won't register the service worker).
+won't register the service worker). Live at: https://akgeni.github.io/technical-score-pwa/
 
 Locally, from this directory:
 ```
@@ -18,26 +18,33 @@ python3 -m http.server 8080
 ```
 then open `http://localhost:8080` in Chrome.
 
-To use it on your **phone**: either serve it from your computer and open your computer's LAN
-IP from your phone's Chrome (same Wi-Fi), or deploy the folder as-is to any static host (e.g.
-GitHub Pages, Netlify) — it's just files, no server code, no environment variables needed.
-
 ## First-time setup
 
-1. Open the app, tap the ⚙ Settings icon, and add a free [Twelve Data](https://twelvedata.com/pricing)
-   API key (self-registered, no card). Search (adding stocks) works without a key; refreshing
-   scores needs one.
-2. Search for a stock (NSE or BSE) and tap a result to add it to your watchlist.
-3. Tap the stock or "Refresh All" to compute its score.
-4. In Chrome's menu, "Add to Home Screen" to install it like an app.
+Data comes from Yahoo Finance (free, no API key, effectively unlimited) — the same source the
+parent Flask app already uses via `yfinance`. Yahoo's response is missing the CORS header
+browsers require though, so a tiny relay you deploy yourself adds it back. This replaced an
+earlier Twelve Data integration whose free tier (8 req/min, 800/day) turned out too tight in
+practice even for a small watchlist.
 
-Free tier: 8 requests/minute, 800/day. Refreshing many stocks at once is automatically paced
-to stay under that — a full watchlist refresh can take a few minutes.
+1. **Deploy the proxy Worker (~1 minute, one-time):**
+   - Sign up free at [workers.cloudflare.com](https://workers.cloudflare.com) (no card needed;
+     free tier is 100,000 requests/day).
+   - Create a Worker, open its online code editor ("Edit code"), delete the placeholder, paste
+     in the full contents of [`cloudflare-worker/yahoo-proxy.js`](cloudflare-worker/yahoo-proxy.js),
+     click **Deploy**.
+   - Copy the Worker's URL — looks like `https://yahoo-proxy.YOUR-SUBDOMAIN.workers.dev`.
+2. Open the app, tap the ⚙ Settings icon, paste that URL in.
+3. Search for a stock (NSE or BSE) and tap a result to add it to your watchlist.
+4. Tap the stock or "Refresh All" to compute its score.
+5. In Chrome's menu, "Add to Home Screen" to install it like an app.
+
+Refreshing many stocks at once is lightly paced (~2/sec) — a full watchlist refresh should
+finish in seconds, not minutes.
 
 ## What's deliberately not included yet (see the parent app for the full feature set)
 
 - Event Score (LLM news-catalyst) metric — always reports unavailable, weight redistributed.
-- Sector-specific benchmarking — Relative Strength uses NIFTYBEES (Nifty 50 ETF) for every
+- Sector-specific benchmarking — Relative Strength uses the Nifty 50 index (`^NSEI`) for every
   stock instead of a per-sector index.
 - The "weak stock history" Entry-signal caveat, sector trend, smart money, backtesting, email.
 
@@ -48,6 +55,10 @@ to stay under that — a full watchlist refresh can take a few minutes.
 
 ## Known open item
 
-This session had no way to test a real Twelve Data API call end-to-end (only their restricted
-"demo" key). Parsing is written against their documented response shape; if the live shape
-differs, that's the first place to check `js/api/twelveData.js`'s `timeSeries()`.
+`js/api/yahooFinance.js`'s `chart()` parser was built against real Yahoo Finance responses
+captured via live `curl` checks during planning (not just docs), including the
+`open/high/low/close/volume` + `adjclose` shape and the split/dividend rescaling logic — but
+this session couldn't deploy an actual Cloudflare Worker itself (account creation is outside
+what this session does), so the full request path (app → your Worker → Yahoo) hasn't been
+exercised end-to-end yet. If something doesn't parse right after you deploy, that's the first
+place to check.

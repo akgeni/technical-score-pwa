@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Engine self-test</title></head>
+<body>
+<pre id="out" style="font-family: monospace; white-space: pre-wrap;"></pre>
+<script type="module">
+import { compute as vsmCompute } from "./js/engine/metrics/vsm.js";
+import { compute as rsCompute } from "./js/engine/metrics/relativeStrength.js";
+import { compute as vwapCompute } from "./js/engine/metrics/vwapVolume.js";
+import { compute as trendCompute } from "./js/engine/metrics/trendStrength.js";
+import { compute as mrCompute } from "./js/engine/metrics/meanReversion.js";
+import { scoreFromMetrics, stubEventScore } from "./js/engine/compositeScorer.js";
+import { computeBreakout } from "./js/engine/breakout/scanEngine.js";
+
+const out = document.getElementById("out");
+function log(...args) {
+  out.textContent += args.map(a => typeof a === "string" ? a : JSON.stringify(a, null, 2)).join(" ") + "\n";
+}
+
+// --- Synthetic data builders ---
+function makeDates(n) {
+  const dates = [];
+  const start = new Date("2023-01-02");
+  let d = new Date(start);
+  while (dates.length < n) {
+    if (d.getDay() !== 0 && d.getDay() !== 6) dates.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
+// Clean steady uptrend: price rises ~0.3%/day with small noise, volume roughly flat.
+function makeUptrend(n = 300, startPrice = 100, dailyReturn = 0.003, seed = 1) {
+  let rng = seed;
+  const rand = () => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
+  const dates = makeDates(n);
+  const close = [startPrice];
+  for (let i = 1; i < n; i++) {
+    const noise = (rand() - 0.5) * 0.01;
+    close.push(close[i - 1] * (1 + dailyReturn + noise));
+  }
+  const open = close.map((c, i) => i === 0 ? c : close[i - 1] * (1 + (rand() - 0.5) * 0.002));
+  const high = close.map((c, i) => Math.max(c, open[i]) * (1 + rand() * 0.005));
+  const low = close.map((c, i) => Math.min(c, open[i]) * (1 - rand() * 0.005));
+  const volume = close.map(() => 1000000 + Math.floor(rand() * 200000));
+  return { date: dates, open, high, low, close, volume };
+}
+
+// Flat/sideways series (for a Nifty-like slow benchmark, and for mean-reversion testing).
+function makeFlat(n = 300, price = 100, seed = 7) {
+  let rng = seed;
+  const rand = () => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
+  const dates = makeDates(n);
+  const close = [];
+  for (let i = 0; i < n; i++) close.push(price * (1 + Math.sin(i / 15) * 0.03 + (rand() - 0.5) * 0.005));
+  const open = close.map((c) => c * (1 + (rand() - 0.5) * 0.002));
+  const high = close.map((c, i) => Math.max(c, open[i]) * (1 + rand() * 0.004));
+  const low = close.map((c, i) => Math.min(c, open[i]) * (1 - rand() * 0.004));
+  const volume = close.map(() => 500000 + Math.floor(rand() * 100000));
+  return { date: dates, open, high, low, close, volume };
+}
+
+// A double-bottom shape: down, flat bottom #1, rally, pull back to a similar bottom #2, then breakout.
+function makeDoubleBottom(seed = 3) {
+  let rng = seed;
+  const rand = () => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
+  const dates = makeDates(180);
+  const close = [];
+  const n = 180;
+  // Phase 1: decline from 150 to 100 over 30 bars (prior downtrend so pivots register)
+  for (let i = 0; i < 30; i++) close.push(150 - (i / 29) * 50);
+  // Phase 2: bottom #1 around 100, noisy, 10 bars
+  for (let i = 0; i < 10; i++) close.push(100 + (rand() - 0.5) * 2);
+  // Phase 3: rally to 120 over 20 bars
+  for (let i = 0; i < 20; i++) close.push(100 + (i / 19) * 20);
+  // Phase 4: pull back to bottom #2 near 101, 20 bars
+  for (let i = 0; i < 20; i++) close.push(120 - (i / 19) * 19);
+  // Phase 5: bottom #2 noisy, 10 bars
+  for (let i = 0; i < 10; i++) close.push(101 + (rand() - 0.5) * 2);
+  // Phase 6: breakout rally past the 120 neckline, 90 bars, ending well above pivot
+  const remaining = n - close.length;
+  for (let i = 0; i < remaining; i++) close.push(101 + (i / (remaining - 1)) * 40);
+
+  const open = close.map((c, i) => i === 0 ? c : close[i - 1]);
+  const high = close.map((c, i) => Math.max(c, open[i]) * (1 + rand() * 0.006));
+  const low = close.map((c, i) => Math.min(c, open[i]) * (1 - rand() * 0.006));
+  const volume = close.map(() => 800000 + Math.floor(rand() * 150000));
+  return { date: dates.slice(0, n), open, high, low, close, volume };
+}
+
+log("=== Test 1: Clean uptrend (300 bars) ===");
+const up = makeUptrend(300);
+const bench = makeFlat(300);
+const vsm1 = vsmCompute(up);
+const rs1 = rsCompute(up, bench);
+const vwap1 = vwapCompute(up);
+const trend1 = trendCompute(up);
+const mr1 = mrCompute(up, trend1.details.adx);
+log("VSM:", { score: vsm1.score, rawValue: vsm1.rawValue, dataStatus: vsm1.details.dataStatus });
+log("RelativeStrength:", { score: rs1.score, rawValue: rs1.rawValue, dataStatus: rs1.details.dataStatus });
+log("VWAPVolume:", { score: vwap1.score, dataStatus: vwap1.details.dataStatus });
+log("TrendStrength:", { score: trend1.score, adx: trend1.details.adx, direction: trend1.details.direction });
+log("MeanReversion:", { score: mr1.score, status: mr1.details.status });
+
+const results1 = {
+  vsm: vsm1, relativeStrength: rs1, vwapVolume: vwap1, trendStrength: trend1,
+  meanReversion: mr1, eventScore: stubEventScore(),
+};
+const composite1 = scoreFromMetrics(results1, up.close[up.close.length - 1]);
+log("COMPOSITE:", { score: composite1.score, regime: composite1.regime, signal: composite1.signal });
+log("EXPECT: score clearly positive, regime Bullish or Strong Bullish, signal Entry or Entry(...)");
+
+log("\n=== Test 2: ADX sanity on the uptrend (expect trending=true, direction=bullish) ===");
+log("trending:", trend1.details.trending, "direction:", trend1.details.direction);
+
+log("\n=== Test 3: Flat/ranging series -> mean reversion should be ACTIVE (ADX low) ===");
+const flat = makeFlat(300);
+const trendFlat = trendCompute(flat);
+const mrFlat = mrCompute(flat, trendFlat.details.adx);
+log("Flat series ADX:", trendFlat.details.adx, "trending:", trendFlat.details.trending);
+log("MeanReversion status on flat series:", mrFlat.details.status, "(expect active_ranging if ADX<=25)");
+
+log("\n=== Test 4: Breakout engine on double-bottom synthetic shape ===");
+const db = makeDoubleBottom();
+const breakout1 = computeBreakout(db, bench);
+if (breakout1 === null) {
+  log("computeBreakout returned null (not enough bars) -- bars:", db.close.length);
+} else {
+  log("Primary pattern:", breakout1.pattern, "| band:", breakout1.band, "| score:", breakout1.score, "| state:", breakout1.state);
+  log("All detected patterns (ranked):", breakout1.details.patterns.map(p => ({ name: p.name, total: p.score.total })));
+}
+
+log("\n=== Test 5: Breakout engine on clean uptrend (sanity -- should run without throwing) ===");
+const breakout2 = computeBreakout(up, bench);
+if (breakout2 === null) {
+  log("computeBreakout returned null -- bars:", up.close.length);
+} else {
+  log("Primary pattern:", breakout2.pattern, "| band:", breakout2.band, "| score:", breakout2.score);
+}
+
+log("\n=== Test 6: Too-short series -> breakout engine should return null gracefully ===");
+const short = makeUptrend(30);
+const breakout3 = computeBreakout(short, bench);
+log("Result for 30-bar series (expect null):", breakout3);
+
+log("\n=== Test 7: Best-Evidenced rule check (signal === 'Entry' strict, pattern === 'Double bottom') ===");
+function isBestEvidenced(compositeResult, breakoutResult) {
+  return compositeResult.signal === "Entry" && breakoutResult && breakoutResult.pattern === "Double bottom";
+}
+log("Uptrend qualifies as Best-Evidenced:", isBestEvidenced(composite1, breakout2));
+
+log("\n=== ALL TESTS RAN WITHOUT THROWING ===");
+window.__testsOk = true;
+
+// Dump the exact synthetic datasets + JS results as JSON so a Python script can run the
+// real services/metrics/*.py + services/composite.py + services/breakout_pattern.py against
+// the SAME arrays and diff outputs numerically -- a much stronger check than "didn't crash".
+window.__crossCheckPayload = {
+  uptrend: up,
+  bench,
+  doubleBottom: db,
+  vsm1, rs1, vwap1, trend1, mr1,
+  composite1: { score: composite1.score, regime: composite1.regime, signal: composite1.signal, weights: composite1.weights },
+  breakout1: breakout1 && {
+    score: breakout1.score, band: breakout1.band, pattern: breakout1.pattern, state: breakout1.state,
+    allPatterns: breakout1.details.patterns.map(p => ({
+      name: p.name, total: p.score.total, band: p.score.band, components: p.score.components,
+      state: p.state.state, pivot: p.pivot, stopRef: p.stopRef,
+      tradeFrame: p.tradeFrame,
+    })),
+    context: breakout1.details.context,
+  },
+  breakout2: breakout2 && {
+    score: breakout2.score, band: breakout2.band, pattern: breakout2.pattern, state: breakout2.state,
+  },
+};
+const dumpEl = document.createElement("textarea");
+dumpEl.id = "crosscheck-json";
+dumpEl.style.display = "none";
+dumpEl.textContent = JSON.stringify(window.__crossCheckPayload);
+document.body.appendChild(dumpEl);
+log("\n[cross-check payload written to #crosscheck-json textarea]");
+</script>
+</body>
+</html>

@@ -58,10 +58,16 @@ async function tier3(nseSymbol, workerUrl) {
     const avgPrice = csvNum(row, "AVG_PRICE");
     const delivPer = csvNum(row, "DELIV_PER");
     if (delivQty === null || closePrice === null || avgPrice === null || delivPer === null) continue;
+    if (avgPrice <= 0) continue;
 
     records.push({
       date: d,
-      flow: delivQty * Math.sign(closePrice - avgPrice),
+      // Signed magnitude of how far close deviated from the day's average price, not just its
+      // sign -- a close 5% above average is a stronger accumulation signature than one 0.1%
+      // above. Scale doesn't matter downstream (only ever feeds a z-score), so this is a
+      // strict information improvement over the old sign()-only version, not a threshold
+      // recalibration. Kept in sync with services/smart_money.py's _tier3.
+      flow: delivQty * ((closePrice - avgPrice) / avgPrice),
       atsRatio: stockAts / marketAts,
       delivPer,
     });

@@ -14,6 +14,12 @@ const TIER = {
   "Cup (handle not yet formed)": 0.60,
   "Double bottom": 0.70,
   "Inverse head & shoulders": 0.65,
+  // Not part of the original skill (see detectors/highTightFlag.js). Deliberately below Bull
+  // flag/pennant despite the pattern's reputation as high-reward -- no backtested evidence yet
+  // that this implementation of it holds up, and the extreme-prior-move precondition is a known
+  // risk factor. Starting guess pending its own backtest, not a claim. Kept in sync with
+  // services/breakout_scan_ext.py's TIER_EXT in the parent Flask app.
+  "High and tight flag": 0.75,
 };
 
 // Reversal patterns form by definition well below the 52w high, so the proximity-to-high
@@ -21,6 +27,7 @@ const TIER = {
 const CONTINUATION = new Set([
   "Flat base / rectangle", "VCP (volatility contraction)", "Ascending triangle",
   "Cup with handle", "Cup (handle not yet formed)", "Bull flag / pennant",
+  "High and tight flag", // continuation pattern, same as regular bull flag
 ]);
 
 // Volatility contraction measured AS OF the end of the base (not today's bar, which the

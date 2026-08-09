@@ -90,6 +90,13 @@ a { color: var(--accent); text-decoration: none; }
 .filter-toggle .ft-title { font-weight: 600; font-size: 0.9rem; }
 .filter-toggle .ft-desc { font-size: 0.78rem; color: var(--text-muted); }
 
+.filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.filter-row label { font-size: 0.85rem; color: var(--text-muted); flex-shrink: 0; }
+.filter-select {
+  flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 0.88rem;
+}
+
 .stock-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px; border-bottom: 1px solid var(--border); cursor: pointer;

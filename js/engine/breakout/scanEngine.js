@@ -1,4 +1,4 @@
-// Orchestrates the breakout engine: run all 7 detectors, attach state/score/trade-frame to
+// Orchestrates the breakout engine: run all 8 detectors, attach state/score/trade-frame to
 // each, rank by score, pick the primary (highest-scoring) pattern.
 // Port of services/breakout_pattern.py's compute().
 //
@@ -18,10 +18,11 @@ import { detectCupHandle } from "./detectors/cupHandle.js";
 import { detectBullFlag } from "./detectors/bullFlag.js";
 import { detectDoubleBottom } from "./detectors/doubleBottom.js";
 import { detectInverseHns } from "./detectors/inverseHns.js";
+import { detectHighTightFlag } from "./detectors/highTightFlag.js";
 
 const DETECTORS = [
   detectFlatBase, detectAscendingTriangle, detectVcp,
-  detectCupHandle, detectBullFlag, detectDoubleBottom, detectInverseHns,
+  detectCupHandle, detectBullFlag, detectDoubleBottom, detectInverseHns, detectHighTightFlag,
 ];
 
 export function computeBreakout(d, bench = null) {

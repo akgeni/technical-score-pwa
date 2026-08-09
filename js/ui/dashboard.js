@@ -7,10 +7,19 @@ import {
 } from "./components.js";
 
 let bestEvidencedOnly = false;
+let breakoutPatternFilter = "All";
 let searchResults = [];
 let searchQuery = "";
 let refreshingAll = false;
 let refreshProgress = { done: 0, total: 0 };
+
+// Order matches services/breakout_scan.py's TIER dict (highest reliability first) in the
+// parent Flask app, with the extension pattern (highTightFlag.js) appended at the end.
+const BREAKOUT_PATTERN_OPTIONS = [
+  "All", "Flat base / rectangle", "VCP (volatility contraction)", "Ascending triangle",
+  "Cup with handle", "Bull flag / pennant", "Cup (handle not yet formed)",
+  "Double bottom", "Inverse head & shoulders", "High and tight flag",
+];
 
 export function renderDashboard(container) {
   const existingSearchInput = container.querySelector("#search-input");
@@ -21,7 +30,10 @@ export function renderDashboard(container) {
   const results = store.getAllResults();
 
   const rows = watchlist.map((s) => ({ stock: s, result: results[s.id] || null }));
-  const visibleRows = bestEvidencedOnly ? rows.filter((r) => isBestEvidenced(r.result)) : rows;
+  let visibleRows = bestEvidencedOnly ? rows.filter((r) => isBestEvidenced(r.result)) : rows;
+  if (breakoutPatternFilter !== "All") {
+    visibleRows = visibleRows.filter((r) => (r.result?.breakout || {}).pattern === breakoutPatternFilter);
+  }
 
   const summary = {
     total: rows.length,
@@ -61,11 +73,20 @@ export function renderDashboard(container) {
       </div>` : ""}
     </div>
 
+    <div class="filter-row">
+      <label for="breakout-pattern-filter">Breakout Pattern</label>
+      <select id="breakout-pattern-filter" class="filter-select">
+        ${BREAKOUT_PATTERN_OPTIONS.map((opt) =>
+          `<option value="${escapeHtml(opt)}" ${opt === breakoutPatternFilter ? "selected" : ""}>${escapeHtml(opt)}</option>`
+        ).join("")}
+      </select>
+    </div>
+
     <label class="filter-toggle">
       <input type="checkbox" id="best-evidenced-toggle" ${bestEvidencedOnly ? "checked" : ""}>
       <span>
         <span class="ft-title">Best-Evidenced Setup Only</span><br>
-        <span class="ft-desc">Composite signal = Entry (strict) AND breakout pattern = Double bottom — the one combination this project's backtest found held up in-sample and out-of-sample. Everything else tested (regime alone, signal alone, breakout band alone) showed no consistent edge. A backtested historical association, not a guarantee.</span>
+        <span class="ft-desc">Composite signal = Entry (strict) AND breakout pattern = Double bottom — the combination this project's backtest found held up best in-sample and out-of-sample, with the largest and most diverse sample among the few that clear the bar (Entry + VCP and Entry + Bull flag/pennant also do, on far fewer tickers). Everything else tested (regime alone, signal alone, breakout band alone) showed no consistent edge. A backtested historical association, not a guarantee.</span>
       </span>
     </label>
 
@@ -141,6 +162,12 @@ function wireEvents(container, restoreFocus, caretPos) {
   const toggle = container.querySelector("#best-evidenced-toggle");
   if (toggle) toggle.addEventListener("change", () => {
     bestEvidencedOnly = toggle.checked;
+    renderDashboard(container);
+  });
+
+  const patternFilter = container.querySelector("#breakout-pattern-filter");
+  if (patternFilter) patternFilter.addEventListener("change", () => {
+    breakoutPatternFilter = patternFilter.value;
     renderDashboard(container);
   });
 

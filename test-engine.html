@@ -149,6 +149,30 @@ function isBestEvidenced(compositeResult, breakoutResult) {
 }
 log("Uptrend qualifies as Best-Evidenced:", isBestEvidenced(composite1, breakout2));
 
+log("\n=== Test 8b: High and tight flag detector (synthetic +115% pole, tight 13% pullback) ===");
+{
+  const n = 100;
+  const close = [];
+  for (let i = 0; i < 50; i++) close.push(100.0);
+  for (let i = 0; i < 30; i++) close.push(100 + (130 * i) / 29);
+  for (let i = 0; i < 15; i++) close.push(230 - (30 * i) / 14);
+  for (let i = 0; i < 5; i++) close.push(205.0);
+  const high = close.map((c) => c * 1.01);
+  const low = close.map((c) => c * 0.99);
+  const open = close.slice();
+  const volume = [];
+  for (let i = 0; i < 50; i++) volume.push(1e6);
+  for (let i = 0; i < 30; i++) volume.push(1e6 + (2e6 * i) / 29);
+  for (let i = 0; i < 15; i++) volume.push(1.5e6 - (0.7e6 * i) / 14);
+  for (let i = 0; i < 5; i++) volume.push(0.8e6);
+  const d = { date: Array.from({ length: n }, (_, i) => `2026-01-${String(i + 1).padStart(2, "0")}`), open, high, low, close, volume };
+  const breakoutHtf = computeBreakout(d, null);
+  log("primary pattern:", breakoutHtf.pattern, "| band:", breakoutHtf.band, "| score:", breakoutHtf.score);
+  log("all patterns found:", breakoutHtf.details.patterns.map(p => ({ name: p.name, total: p.score.total })));
+  const foundHtf = breakoutHtf.details.patterns.some(p => p.name === "High and tight flag");
+  log(foundHtf ? "PASS: High and tight flag detected among candidates" : "FAIL: High and tight flag NOT detected");
+}
+
 log("\n=== Test 8: miniZip against a real downloaded NSE F&O bhavcopy zip ===");
 try {
   const { unzipSingleEntry } = await import("./js/api/miniZip.js");

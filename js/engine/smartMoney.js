@@ -14,7 +14,17 @@ import { mean, stddev0, median } from "./indicators.js";
 import { fetchBhavcopy, fetchFoBhavcopy, recentTradingDays, csvNum } from "../api/nseData.js";
 
 const TIER3_FLOW_WINDOW = 20;
-const TIER3_BASELINE_LOOKBACK = 60;
+// Widened from 60 so the strided comparison sample below (see TIER3_WINDOW_STRIDE) still has
+// enough points after striding cuts the raw daily count roughly 5x. Kept in sync with
+// services/smart_money.py's TIER3_BASELINE_LOOKBACK.
+const TIER3_BASELINE_LOOKBACK = 100;
+// Adjacent DAILY rolling-flow sums share (WINDOW-1)/WINDOW of their underlying days -- 19 of 20
+// for a 20-day window, i.e. 95% overlap. Z-scoring today's reading against a population built
+// from every single day understates how much an independent ~20-day flow reading actually
+// varies. Striding the comparison population by 5 trading days cuts that overlap to at most
+// 75% between consecutive comparison points. Kept in sync with services/smart_money.py.
+const TIER3_WINDOW_STRIDE = 5;
+const TIER3_MIN_STRIDED_SAMPLES = 8;
 const TIER2_WINDOW = 15;
 const TIER2_CONVICTION_THRESHOLD = 2.0;
 const Z_THRESHOLD = 0.5;
@@ -78,16 +88,21 @@ async function tier3(nseSymbol, workerUrl) {
   }
 
   const flows = records.map((r) => r.flow);
-  const windowSums = [];
+  const rollingSums = [];
   for (let i = TIER3_FLOW_WINDOW - 1; i < flows.length; i++) {
     let s = 0;
     for (let j = i - TIER3_FLOW_WINDOW + 1; j <= i; j++) s += flows[j];
-    windowSums.push(s);
+    rollingSums.push(s);
   }
-  if (windowSums.length < 10) return { status: "insufficient_data" };
-  const windowStd = stddev0(windowSums);
-  if (windowStd === 0) return { status: "insufficient_data" };
-  const flowZ = (windowSums[windowSums.length - 1] - mean(windowSums)) / windowStd;
+  // Sample backward from the latest rolling sum in TIER3_WINDOW_STRIDE-day steps instead of
+  // using every single day -- see the constant's comment above. Walking backward from the end
+  // guarantees the latest reading is always the "current" value being z-scored.
+  const stridedSums = [];
+  for (let i = rollingSums.length - 1; i >= 0; i -= TIER3_WINDOW_STRIDE) stridedSums.unshift(rollingSums[i]);
+  if (stridedSums.length < TIER3_MIN_STRIDED_SAMPLES) return { status: "insufficient_data" };
+  const stridedStd = stddev0(stridedSums);
+  if (stridedStd === 0) return { status: "insufficient_data" };
+  const flowZ = (stridedSums[stridedSums.length - 1] - mean(stridedSums)) / stridedStd;
 
   let atsZ = null;
   const ratioSeries = records.map((r) => r.atsRatio);
@@ -110,6 +125,7 @@ async function tier3(nseSymbol, workerUrl) {
 async function tier2(nseSymbol, workerUrl) {
   const tradingDays = await recentTradingDays(TIER2_WINDOW, workerUrl);
   const dailyStates = [];
+  let prevExpiry = null;
 
   for (const d of tradingDays) {
     const fo = await fetchFoBhavcopy(d, workerUrl);
@@ -118,6 +134,15 @@ async function tier2(nseSymbol, workerUrl) {
     if (stf.length === 0) continue;
     stf.sort((a, b) => (a.XpryDt < b.XpryDt ? -1 : a.XpryDt > b.XpryDt ? 1 : 0));
     const r = stf[0]; // nearest-expiry (front-month) contract
+    const expiry = r.XpryDt;
+    // The front-month contract's own reported OI change is unreliable on the day it rolls over
+    // to a new expiry (ramping up from a low base, or the old one collapsing toward expiry) --
+    // that's rollover mechanics, not a change in conviction. Skip the transition day.
+    if (prevExpiry !== null && expiry !== prevExpiry) {
+      prevExpiry = expiry;
+      continue;
+    }
+    prevExpiry = expiry;
 
     const clsPric = csvNum(r, "ClsPric");
     const prvsClsgPric = csvNum(r, "PrvsClsgPric");
@@ -154,16 +179,18 @@ async function tier2(nseSymbol, workerUrl) {
   };
 }
 
+// Requires both tiers to have an actual directional (non-Neutral) read to say anything (same
+// bar as before). But "Cross-Confirmed" now requires BOTH tiers that computed (status "ok"),
+// INCLUDING an explicit Neutral read, to point the same way -- a computed-but-neutral tier
+// used to be silently dropped, letting the other tier's direction claim "Cross-Confirmed" on
+// its own. Kept in sync with services/smart_money.py's _agreement_label.
 function agreementLabel(tier2Result, tier3Result) {
-  const directions = [];
-  for (const t of [tier2Result, tier3Result]) {
-    if (t && t.status === "ok" && (t.direction === "Bullish" || t.direction === "Bearish")) {
-      directions.push(t.direction);
-    }
-  }
-  if (directions.length < 2) return "Insufficient Data";
-  if (directions.every((d) => d === "Bullish")) return "Cross-Confirmed Accumulation";
-  if (directions.every((d) => d === "Bearish")) return "Cross-Confirmed Distribution";
+  const okTiers = [tier2Result, tier3Result].filter((t) => t && t.status === "ok");
+  const directional = okTiers.filter((t) => t.direction === "Bullish" || t.direction === "Bearish");
+  if (directional.length < 2) return "Insufficient Data";
+  const allDirections = okTiers.map((t) => t.direction);
+  if (allDirections.every((d) => d === "Bullish")) return "Cross-Confirmed Accumulation";
+  if (allDirections.every((d) => d === "Bearish")) return "Cross-Confirmed Distribution";
   return "Mixed";
 }
 

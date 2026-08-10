@@ -1,7 +1,7 @@
 // Service worker: caches the app shell (HTML/CSS/JS) for offline load. Deliberately does NOT
 // intercept or cache Yahoo Finance/Worker-proxy calls (different origin, and price data must
 // always be fetched fresh) -- only same-origin static-file requests go through the cache.
-const CACHE_NAME = "technical-score-v6";
+const CACHE_NAME = "technical-score-v7";
 
 const APP_SHELL = [
   "./",
@@ -41,6 +41,7 @@ const APP_SHELL = [
   "./js/engine/breakout/detectors/doubleBottom.js",
   "./js/engine/breakout/detectors/inverseHns.js",
   "./js/engine/breakout/detectors/highTightFlag.js",
+  "./js/engine/breakout/detectors/symmetricalTriangle.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];

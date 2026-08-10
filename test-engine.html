@@ -173,6 +173,38 @@ log("\n=== Test 8b: High and tight flag detector (synthetic +115% pole, tight 13
   log(foundHtf ? "PASS: High and tight flag detected among candidates" : "FAIL: High and tight flag NOT detected");
 }
 
+log("\n=== Test 8c: Symmetrical triangle detector (synthetic converging highs/lows) ===");
+{
+  const n = 140;
+  const close = new Array(n).fill(100), high = new Array(n).fill(101), low = new Array(n).fill(99);
+  for (let i = 0; i < 40; i++) {
+    close[i] = 80 + i * 0.5;
+    high[i] = close[i] + 0.3;
+    low[i] = close[i] - 0.3;
+  }
+  const baseTop = 100.0, baseBot = 90.0, seg = 10;
+  const nseg = Math.floor((n - 40) / seg);
+  for (let s = 0; s < nseg; s++) {
+    const top = baseTop - s * 0.8, bot = baseBot + s * 0.8;
+    const start = 40 + s * seg;
+    for (let j = 0; j < seg; j++) {
+      const idx = start + j;
+      if (idx >= n) break;
+      const frac = j / seg;
+      const val = bot + (top - bot) * Math.abs(Math.sin(Math.PI * frac));
+      close[idx] = val; high[idx] = val + 0.2; low[idx] = val - 0.2;
+    }
+  }
+  const open = close.slice();
+  const volume = new Array(n).fill(1e6);
+  const d = { date: Array.from({ length: n }, (_, i) => `2026-01-${String((i % 28) + 1).padStart(2, "0")}`), open, high, low, close, volume };
+  const breakoutTri = computeBreakout(d, null);
+  log("primary pattern:", breakoutTri.pattern, "| band:", breakoutTri.band, "| score:", breakoutTri.score);
+  log("all patterns found:", breakoutTri.details.patterns.map(p => ({ name: p.name, total: p.score.total })));
+  const foundTri = breakoutTri.details.patterns.some(p => p.name === "Symmetrical triangle");
+  log(foundTri ? "PASS: Symmetrical triangle detected among candidates" : "FAIL: Symmetrical triangle NOT detected");
+}
+
 log("\n=== Test 8: miniZip against a real downloaded NSE F&O bhavcopy zip ===");
 try {
   const { unzipSingleEntry } = await import("./js/api/miniZip.js");

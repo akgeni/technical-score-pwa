@@ -20,6 +20,10 @@ const TIER = {
   // risk factor. Starting guess pending its own backtest, not a claim. Kept in sync with
   // services/breakout_scan_ext.py's TIER_EXT in the parent Flask app.
   "High and tight flag": 0.75,
+  // Not part of the original skill (see detectors/symmetricalTriangle.js). Structurally close
+  // to the vendored Ascending Triangle (0.90), but with no backtested evidence yet -- starting
+  // guess, not a claim. Kept in sync with services/breakout_scan_ext.py's TIER_EXT.
+  "Symmetrical triangle": 0.75,
 };
 
 // Reversal patterns form by definition well below the 52w high, so the proximity-to-high
@@ -28,6 +32,7 @@ const CONTINUATION = new Set([
   "Flat base / rectangle", "VCP (volatility contraction)", "Ascending triangle",
   "Cup with handle", "Cup (handle not yet formed)", "Bull flag / pennant",
   "High and tight flag", // continuation pattern, same as regular bull flag
+  "Symmetrical triangle", // mid-trend consolidation, same as the vendored continuation patterns
 ]);
 
 // Volatility contraction measured AS OF the end of the base (not today's bar, which the

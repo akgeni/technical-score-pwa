@@ -20,7 +20,7 @@ let refreshProgress = { done: 0, total: 0 };
 const BREAKOUT_PATTERN_OPTIONS = [
   "All", "Flat base / rectangle", "VCP (volatility contraction)", "Ascending triangle",
   "Cup with handle", "Bull flag / pennant", "Cup (handle not yet formed)",
-  "Double bottom", "Inverse head & shoulders", "High and tight flag",
+  "Double bottom", "Inverse head & shoulders", "High and tight flag", "Symmetrical triangle",
 ];
 // Mirrors app.py's BREAKOUT_FILTER_OPTIONS (band/state, distinct from the pattern-name filter
 // above).

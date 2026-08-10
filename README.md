@@ -3,8 +3,10 @@
 On-device technical-analysis scoring for NSE/BSE stocks — no backend service. Everything
 (data fetch, indicator math, breakout-pattern detection, smart-money read, storage) runs in
 the browser on your phone. Ported from the Flask app in `../technical-analysis-scores`,
-starting with the **Best-Evidenced Setup Only** rule (composite signal = strict `Entry` AND
-breakout pattern = `Double bottom`) as the headline feature.
+starting with the **Best-Evidenced Combo** rule (an Entry-family composite signal AND breakout
+pattern `Double bottom` or `Bull flag / pennant` AND conviction band `MARGINAL` — from the
+pattern x band x signal walk-forward scan) as the headline feature, alongside standalone
+Breakout Pattern, Breakout Setup (band), and Signal filters.
 
 ## Run it
 

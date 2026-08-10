@@ -3,11 +3,13 @@ import { symbolSearch, refreshQueue } from "../api/yahooFinance.js";
 import { runAnalysis, fetchBenchmark } from "../engine/runAnalysis.js";
 import {
   escapeHtml, regimeBadge, signalBadge, breakoutBadge, smartMoneyBadge, scoreClass, fmtScore,
-  fmtPrice, isBestEvidenced, showToast,
+  fmtPrice, isBestEvidenced, matchesBestEvidencedCombo, showToast,
 } from "./components.js";
 
-let bestEvidencedOnly = false;
 let breakoutPatternFilter = "All";
+let bandFilter = "All";
+let signalFilter = "All";
+let bestEvidencedCombo = "Off";
 let searchResults = [];
 let searchQuery = "";
 let refreshingAll = false;
@@ -20,6 +22,36 @@ const BREAKOUT_PATTERN_OPTIONS = [
   "Cup with handle", "Bull flag / pennant", "Cup (handle not yet formed)",
   "Double bottom", "Inverse head & shoulders", "High and tight flag",
 ];
+// Mirrors app.py's BREAKOUT_FILTER_OPTIONS (band/state, distinct from the pattern-name filter
+// above).
+const BAND_OPTIONS = ["All", "Any Setup", "High Conviction", "Constructive+", "Marginal",
+  "Confirmed / At Pivot", "No Setup"];
+const SIGNAL_OPTIONS = ["All", "Entry", "Hold", "Exit"];
+// Mirrors app.py's BEST_EVIDENCED_OPTIONS -- see components.js's matchesBestEvidencedCombo for
+// the matching logic and the pattern x band x signal scan for where these numbers came from.
+const BEST_EVIDENCED_OPTIONS = ["Off", "Entry + Double Bottom + Marginal", "Entry + Bull Flag/Pennant + Marginal"];
+
+function matchesBand(result, filterValue) {
+  if (!filterValue || filterValue === "All") return true;
+  const breakout = result && result.breakout;
+  const band = breakout ? breakout.band : null;
+  const state = (breakout && breakout.state) || "";
+  const hasSetup = band != null && band !== "NO SETUP";
+  if (filterValue === "Any Setup") return hasSetup;
+  if (filterValue === "No Setup") return !hasSetup;
+  if (filterValue === "High Conviction") return band === "HIGH CONVICTION";
+  if (filterValue === "Constructive+") return band === "HIGH CONVICTION" || band === "CONSTRUCTIVE";
+  if (filterValue === "Marginal") return band === "MARGINAL — watchlist only";
+  if (filterValue === "Confirmed / At Pivot") return hasSetup && (state.includes("CONFIRMED") || state.includes("AT PIVOT"));
+  return true;
+}
+
+function matchesSignal(result, filterValue) {
+  if (!filterValue || filterValue === "All") return true;
+  const signal = (result && result.composite && result.composite.signal) || "";
+  if (filterValue === "Entry") return signal.startsWith("Entry");
+  return signal === filterValue;
+}
 
 export function renderDashboard(container) {
   const existingSearchInput = container.querySelector("#search-input");
@@ -30,10 +62,13 @@ export function renderDashboard(container) {
   const results = store.getAllResults();
 
   const rows = watchlist.map((s) => ({ stock: s, result: results[s.id] || null }));
-  let visibleRows = bestEvidencedOnly ? rows.filter((r) => isBestEvidenced(r.result)) : rows;
+  let visibleRows = rows;
   if (breakoutPatternFilter !== "All") {
     visibleRows = visibleRows.filter((r) => (r.result?.breakout || {}).pattern === breakoutPatternFilter);
   }
+  visibleRows = visibleRows.filter((r) => matchesBand(r.result, bandFilter));
+  visibleRows = visibleRows.filter((r) => matchesSignal(r.result, signalFilter));
+  visibleRows = visibleRows.filter((r) => matchesBestEvidencedCombo(r.result, bestEvidencedCombo));
 
   const summary = {
     total: rows.length,
@@ -82,12 +117,32 @@ export function renderDashboard(container) {
       </select>
     </div>
 
-    <label class="filter-toggle">
-      <input type="checkbox" id="best-evidenced-toggle" ${bestEvidencedOnly ? "checked" : ""}>
-      <span>
-        <span class="ft-title">Best-Evidenced Setup Only</span><br>
-        <span class="ft-desc">Composite signal = Entry (strict) AND breakout pattern = Double bottom — the combination this project's backtest found held up best in-sample and out-of-sample, with the largest and most diverse sample among the few that clear the bar (Entry + VCP and Entry + Bull flag/pennant also do, on far fewer tickers). Everything else tested (regime alone, signal alone, breakout band alone) showed no consistent edge. A backtested historical association, not a guarantee.</span>
-      </span>
+    <div class="filter-row">
+      <label for="band-filter" title="Filter by the detected breakout chart-pattern setup quality/state.">Breakout Setup</label>
+      <select id="band-filter" class="filter-select">
+        ${BAND_OPTIONS.map((opt) =>
+          `<option value="${escapeHtml(opt)}" ${opt === bandFilter ? "selected" : ""}>${escapeHtml(opt)}</option>`
+        ).join("")}
+      </select>
+    </div>
+
+    <div class="filter-row">
+      <label for="signal-filter" title="The composite Entry/Hold/Exit gate — distinct from Regime. 'Entry' matches both 'Entry' and 'Entry (weak volume)'.">Signal</label>
+      <select id="signal-filter" class="filter-select">
+        ${SIGNAL_OPTIONS.map((opt) =>
+          `<option value="${escapeHtml(opt)}" ${opt === signalFilter ? "selected" : ""}>${escapeHtml(opt)}</option>`
+        ).join("")}
+      </select>
+    </div>
+
+    <label class="filter-toggle" style="display: block;">
+      <span class="ft-title">Best-Evidenced Combo (pattern x band x signal)</span><br>
+      <span class="ft-desc">Prebaked combinations from the pattern x band x signal walk-forward scan. Entry + Double Bottom + Marginal: in-sample +1.68pp / out-of-sample +1.91pp win-rate edge, 24/19 tickers — the largest well-powered sample in the scan. Entry + Bull Flag/Pennant + Marginal: in-sample +5.43pp / out-of-sample +3.97pp, 12/10 tickers — the single largest edge found, on a narrower sample. Both require an Entry-family signal AND the MARGINAL band specifically — pooling all bands together (the old rule) hid a Constructive-band slice that flipped sign between splits. Backtested historical associations, not guarantees.</span>
+      <select id="best-evidenced-combo" class="filter-select" style="display: block; width: 100%; margin-top: 8px;">
+        ${BEST_EVIDENCED_OPTIONS.map((opt) =>
+          `<option value="${escapeHtml(opt)}" ${opt === bestEvidencedCombo ? "selected" : ""}>${escapeHtml(opt)}</option>`
+        ).join("")}
+      </select>
     </label>
 
     <div class="card" style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
@@ -159,15 +214,27 @@ function wireEvents(container, restoreFocus, caretPos) {
   const bannerBtn = container.querySelector("#btn-open-settings-banner");
   if (bannerBtn) bannerBtn.addEventListener("click", () => document.getElementById("btn-settings").click());
 
-  const toggle = container.querySelector("#best-evidenced-toggle");
-  if (toggle) toggle.addEventListener("change", () => {
-    bestEvidencedOnly = toggle.checked;
+  const comboSelect = container.querySelector("#best-evidenced-combo");
+  if (comboSelect) comboSelect.addEventListener("change", () => {
+    bestEvidencedCombo = comboSelect.value;
     renderDashboard(container);
   });
 
   const patternFilter = container.querySelector("#breakout-pattern-filter");
   if (patternFilter) patternFilter.addEventListener("change", () => {
     breakoutPatternFilter = patternFilter.value;
+    renderDashboard(container);
+  });
+
+  const bandSelect = container.querySelector("#band-filter");
+  if (bandSelect) bandSelect.addEventListener("change", () => {
+    bandFilter = bandSelect.value;
+    renderDashboard(container);
+  });
+
+  const signalSelect = container.querySelector("#signal-filter");
+  if (signalSelect) signalSelect.addEventListener("change", () => {
+    signalFilter = signalSelect.value;
     renderDashboard(container);
   });
 

@@ -45,11 +45,13 @@ export function renderDetail(container, stockId) {
     <div class="card" style="border-color: var(--green);">
       <span class="badge badge-green">★ Best-Evidenced Setup</span>
       <p style="font-size:0.82rem; color: var(--text-muted); margin: 8px 0 0;">
-        Composite signal is a strict Entry AND the breakout engine's top-ranked pattern is Double
-        bottom — the combination this project's backtest found held up best in-sample and
-        out-of-sample (out-of-sample: 37.5% win rate vs 31.3% baseline). Two other combinations
-        (Entry + VCP, Entry + Bull flag/pennant) also clear the same bar but on far fewer
-        distinct tickers. A backtested historical association, not a guarantee.
+        Composite signal is Entry-family (Entry or Entry (weak volume)) AND the breakout
+        engine's top-ranked pattern is Double bottom or Bull flag/pennant AND the conviction
+        band is MARGINAL specifically — the two combinations from the pattern x band x signal
+        walk-forward scan whose edge held up same-direction in both backtest splits. Entry +
+        Double Bottom + Marginal: +1.68pp in-sample / +1.91pp out-of-sample, 24/19 tickers.
+        Entry + Bull Flag/Pennant + Marginal: +5.43pp in-sample / +3.97pp out-of-sample, 12/10
+        tickers. A backtested historical association, not a guarantee.
       </p>
     </div>` : ""}
 

@@ -52,10 +52,31 @@ export function fmtPrice(p) {
   return p.toFixed(2);
 }
 
+const BEST_EVIDENCED_PATTERNS = ["Double bottom", "Bull flag / pennant"];
+
+// Prebaked combinations from the pattern x band x signal walk-forward scan: an Entry-family
+// signal (Entry or Entry (weak volume)) AND one of the two patterns whose edge held up
+// same-direction in both backtest splits AND the MARGINAL conviction band specifically -- not
+// "any band". Supersedes the old all-bands-pooled "Entry (strict) + Double bottom" rule, which
+// mixed this same Marginal slice with a Constructive slice that flipped sign between splits.
 export function isBestEvidenced(result) {
-  return !!(result && result.composite && result.breakout
-    && result.composite.signal === "Entry"
-    && result.breakout.pattern === "Double bottom");
+  if (!result || !result.composite || !result.breakout) return false;
+  const signal = result.composite.signal || "";
+  const band = result.breakout.band;
+  const pattern = result.breakout.pattern;
+  return signal.startsWith("Entry") && band === "MARGINAL — watchlist only"
+    && BEST_EVIDENCED_PATTERNS.includes(pattern);
+}
+
+export function matchesBestEvidencedCombo(result, combo) {
+  if (!combo || combo === "Off") return true;
+  if (!result || !result.composite || !result.breakout) return false;
+  const signal = result.composite.signal || "";
+  if (!signal.startsWith("Entry")) return false;
+  if (result.breakout.band !== "MARGINAL — watchlist only") return false;
+  if (combo === "Entry + Double Bottom + Marginal") return result.breakout.pattern === "Double bottom";
+  if (combo === "Entry + Bull Flag/Pennant + Marginal") return result.breakout.pattern === "Bull flag / pennant";
+  return false;
 }
 
 export function showToast(message, ms = 3500) {
